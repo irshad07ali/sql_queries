@@ -100,9 +100,41 @@ FROM (
   FROM StreaksWithID
   GROUP BY user_id, streak_id
 ) streaks_per_user
-GROUP BY user_id;
+GROUP BY user_id
+order by user_id;
+----------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------
+--approach 2
 
+WITH NumberedEvents AS (
+  SELECT 
+    user_id,
+    event_time,
+    flag,
+    ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY event_time) AS rn1,
+    -- Assign row numbers for only the winning events
+    ROW_NUMBER() OVER (PARTITION BY user_id, flag ORDER BY event_time) AS rn2
+  FROM Test.user_events
+),
+Streaks AS (
+  SELECT 
+    user_id,
+    flag,
+    rn1 - rn2 AS streak_group
+  FROM NumberedEvents
+  WHERE flag = 1 -- We are only interested in winning events
+),
+final as(
+-- Count the number of events in each streak group and get the maximum streak length per user
+SELECT 
+  user_id,
+  COUNT(*) AS max_streak
+FROM Streaks
+GROUP BY user_id, streak_group
+ORDER BY user_id
+)
 
------
-
-https://docs.google.com/spreadsheets/d/1MgcTTnS9Eu9NtJPTUXHd-FktiS84guUDZnrcFJ-397U/edit?gid=0#gid=0
+select user_id,max(max_streak)
+from final
+group by 1
+order by user_id
